@@ -150,40 +150,74 @@ def showWelcomeAnimation():
 
     # player shm for up-down motion on welcome screen
     playerShmVals = {'val': 0, 'dir': 1}
+    return {
+        'playery': playery + playerShmVals['val'],
+        'basex': basex,
+        'playerIndexGen': playerIndexGen,
+        }
 
-    while True:
-        for event in pygame.event.get():
-            if event.type == QUIT or (event.type == KEYDOWN and event.key == K_ESCAPE):
-                pygame.quit()
-                sys.exit()
-            if event.type == KEYDOWN and (event.key == K_SPACE or event.key == K_UP):
-                # make first flap sound and return values for mainGame
-                SOUNDS['wing'].play()
-                return {
-                    'playery': playery + playerShmVals['val'],
-                    'basex': basex,
-                    'playerIndexGen': playerIndexGen,
-                }
+class Decider:
+    def __init__(self):
+        pass
+    def getAction(self, worldState):
+       #extract features:
+       closePipeMiddle = worldState['upperPipes'][0]['y']/2 + worldState['lowerPipes'][0]['y']/2
+       closePipeOut = worldState['upperPipes'][0]['x'] - worldState['x']
+       currY = worldState['y']
+       currYVel = worldState['playerVelY']
+       # now we can ML with these!
+       if random.randint(0,30) == 0:
+           return pygame.event.Event(KEYDOWN, key = K_UP)
+       else:
+           return None
 
-        # adjust playery, playerIndex, basex
-        if (loopIter + 1) % 5 == 0:
-            playerIndex = playerIndexGen.next()
-        loopIter = (loopIter + 1) % 30
-        basex = -((-basex + 4) % baseShift)
-        playerShm(playerShmVals)
+def simulate(v, events):
+    playerx = v['playerx']
+    playery = v['playery']
+    playerVelY = v['playerVelY']
+    playerFlapAcc = v['playerFlapAcc']
+    playerIndex = v['playerIndex']
+    basex = v['basex']
+    playerMaxVelY = v['playerMaxVelY']
+    playerAccY = v['playerAccY']
+    upperPipes = list(v['upperPipes'])
+    lowerPipes = list(v['lowerPipes'])
+    baseShift = v['baseShift']
+    pipeVelX = v['pipeVelX']
 
-        # draw sprites
-        SCREEN.blit(IMAGES['background'], (0,0))
-        SCREEN.blit(IMAGES['player'][playerIndex],
-                    (playerx, playery + playerShmVals['val']))
-        SCREEN.blit(IMAGES['message'], (messagex, messagey))
-        SCREEN.blit(IMAGES['base'], (basex, BASEY))
+    for event in events:
+        if playery > -2 * IMAGES['player'][0].get_height():
+            playerVelY = playerFlapAcc
+            playerFlapped = True
 
-        pygame.display.update()
-        FPSCLOCK.tick(FPS)
+        crashTest = checkCrash({'x': playerx, 'y': playery, 'index': playerIndex},
+                               upperPipes, lowerPipes)
+        if crashTest[0]:
+            return {"crashed": True}
+        
+        basex = -((-basex + 100) % baseShift)
 
+        # player's movement
+        if playerVelY < playerMaxVelY and not playerFlapped:
+            playerVelY += playerAccY
+        if playerFlapped:
+            playerFlapped = False
+        playerHeight = max(IMAGES['player'], key=lambda x: x.get_height()).get_height()
+        playery += min(playerVelY, BASEY - playery - playerHeight)
+
+        # move pipes to left
+        for uPipe, lPipe in zip(upperPipes, lowerPipes):
+            uPipe['x'] += pipeVelX
+            lPipe['x'] += pipeVelX
+
+        # add new pipe when first pipe is about to touch left of screen
+        if playerx + 50 >= upperPipes[0]['x']:
+            upperPipes[0]['x'] = upperPipes[1]['x']
+            upperPipes[0]['y'] = upperPipes[1]['y']
+    return {'upperPipes': upperPipes, 'lowerPipes': lowerPipes, 'x': playerx, 'y': playery, 'playerVelY': playerVelY}
 
 def mainGame(movementInfo):
+    decider = Decider()
     score = playerIndex = loopIter = 0
     playerIndexGen = movementInfo['playerIndexGen']
     playerx, playery = int(SCREENWIDTH * 0.2), movementInfo['playery']
@@ -217,7 +251,6 @@ def mainGame(movementInfo):
     playerFlapAcc =  -9   # players speed on flapping
     playerFlapped = False # True when player flaps
 
-
     while True:
         for event in pygame.event.get():
             if event.type == QUIT or (event.type == KEYDOWN and event.key == K_ESCAPE):
@@ -228,7 +261,6 @@ def mainGame(movementInfo):
                     playerVelY = playerFlapAcc
                     playerFlapped = True
                     SOUNDS['wing'].play()
-
         # check for crash here
         crashTest = checkCrash({'x': playerx, 'y': playery, 'index': playerIndex},
                                upperPipes, lowerPipes)
@@ -242,7 +274,6 @@ def mainGame(movementInfo):
                 'score': score,
                 'playerVelY': playerVelY,
             }
-
         # check for score
         playerMidPos = playerx + IMAGES['player'][0].get_width() / 2
         for pipe in upperPipes:
@@ -294,6 +325,13 @@ def mainGame(movementInfo):
         SCREEN.blit(IMAGES['player'][playerIndex], (playerx, playery))
 
         pygame.display.update()
+        simulate(locals(),[event])
+        worldState = {'x': playerx, 'y': playery, 'basex': basex, 'upperPipes': upperPipes, 'lowerPipes': lowerPipes, 'score': score, 'playerVelY': playerVelY} 
+        action = decider.getAction(worldState)
+        if action is not None:
+            pygame.event.post(action)
+            print worldState
+            print action
         FPSCLOCK.tick(FPS)
 
 
