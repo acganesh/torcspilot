@@ -2,6 +2,8 @@ from itertools import cycle
 import random
 import sys
 
+
+import copy
 import pygame
 from pygame.locals import *
 
@@ -159,8 +161,11 @@ def showWelcomeAnimation():
 class Decider:
     def __init__(self):
         pass
-    def getAction(self, worldState):
+    def getAction(self, worldState, prefeatures):
        #extract features:
+       simulate(prefeatures,[pygame.event.Event(KEYDOWN, key = K_UP)]);
+       simulate(prefeatures,[None])
+       
        closePipeMiddle = worldState['upperPipes'][0]['y']/2 + worldState['lowerPipes'][0]['y']/2
        closePipeOut = worldState['upperPipes'][0]['x'] - worldState['x']
        currY = worldState['y']
@@ -180,13 +185,14 @@ def simulate(v, events):
     basex = v['basex']
     playerMaxVelY = v['playerMaxVelY']
     playerAccY = v['playerAccY']
-    upperPipes = list(v['upperPipes'])
-    lowerPipes = list(v['lowerPipes'])
+    upperPipes = copy.deepcopy(v['upperPipes'])
+    lowerPipes = copy.deepcopy(v['lowerPipes'])
     baseShift = v['baseShift']
     pipeVelX = v['pipeVelX']
+    playerFlapped = False
 
     for event in events:
-        if playery > -2 * IMAGES['player'][0].get_height():
+        if event is not None and playery > -2 * IMAGES['player'][0].get_height():
             playerVelY = playerFlapAcc
             playerFlapped = True
 
@@ -211,6 +217,7 @@ def simulate(v, events):
             lPipe['x'] += pipeVelX
 
         # add new pipe when first pipe is about to touch left of screen
+        
         if playerx + 50 >= upperPipes[0]['x']:
             upperPipes[0]['x'] = upperPipes[1]['x']
             upperPipes[0]['y'] = upperPipes[1]['y']
@@ -325,9 +332,8 @@ def mainGame(movementInfo):
         SCREEN.blit(IMAGES['player'][playerIndex], (playerx, playery))
 
         pygame.display.update()
-        simulate(locals(),[event])
         worldState = {'x': playerx, 'y': playery, 'basex': basex, 'upperPipes': upperPipes, 'lowerPipes': lowerPipes, 'score': score, 'playerVelY': playerVelY} 
-        action = decider.getAction(worldState)
+        action = decider.getAction(worldState, locals())
         if action is not None:
             pygame.event.post(action)
             print worldState
