@@ -1,14 +1,17 @@
 from itertools import cycle
 import random
 import sys
-
+import operator
 
 import copy
 import pygame
+import itertools
 from pygame.locals import *
 
+iters = 0
+games = 0
 
-FPS = 30
+FPS = 3000
 SCREENWIDTH  = 288
 SCREENHEIGHT = 512
 # amount by which base can maximum shift to left
@@ -129,7 +132,6 @@ def main():
 
         movementInfo = showWelcomeAnimation()
         crashInfo = mainGame(movementInfo)
-        showGameOverScreen(crashInfo)
 
 
 def showWelcomeAnimation():
@@ -160,22 +162,65 @@ def showWelcomeAnimation():
 
 class Decider:
     def __init__(self):
-        pass
-    def getAction(self, worldState, prefeatures):
-       #extract features:
-       simulate(prefeatures,[pygame.event.Event(KEYDOWN, key = K_UP)]);
-       simulate(prefeatures,[None])
+        self.t = 0
+        self.discount = .95
+        self.trace = []
+        self.nstate = None
+        self.seen = {}
+        self.historicState = None
+        self.historicAction = None
+        self.actions = [None, pygame.event.Event(KEYDOWN, key = K_UP)]
+        self.states = [i for i in itertools.product(range(-50,250), range(-250,250), range(-15,15))]
+        self.states.append(('crashed',))
+        self.q = {sa : random.random() if sa[1] == 0 else .1*random.random() for sa in itertools.product(self.states, range(0,len(self.actions)))}
+    def handleActions(self, oldAction, prefeatures):
+       if self.historicState is not None and self.historicState[0] == 'crashed':
+           self.historicAction = None
+           self.historicState = None
+       def processGlobalState(state):
+           if 'crashed' in state:
+               return ('crashed',)
+           i = 0
+           if state['playerx'] - 40 >= state['upperPipes'][0]['x']:
+               i = 1
+           closePipeOut = state['upperPipes'][i]['x'] - state['playerx']
+           currY = state['playery']
+           currYVel = state['playerVelY']
+           currAcc = state['playerAccY']
+           Ymetric = currY - state['lowerPipes'][i]['y']
+           if closePipeOut >= 200:
+               closePipeOut = 199
+           if Ymetric >= 200:
+               Ymetric = 199
+           if Ymetric <= -200:
+               Ymetric = -199
+           return (int(closePipeOut), int(Ymetric), int(currYVel))
+       currState = processGlobalState(prefeatures)
        
-       closePipeMiddle = worldState['upperPipes'][0]['y']/2 + worldState['lowerPipes'][0]['y']/2
-       closePipeOut = worldState['upperPipes'][0]['x'] - worldState['x']
-       currY = worldState['y']
-       currYVel = worldState['playerVelY']
-       # now we can ML with these!
-       if random.randint(0,30) == 0:
-           return pygame.event.Event(KEYDOWN, key = K_UP)
+       reward = 1
+       if 'crashed' == currState[0]:
+           reward = -10000
+       if reward != -10000:
+           states = {i : processGlobalState(simulate(prefeatures,[self.actions[i]])) for i in range(0,len(self.actions))} 
+           actionIndex = max(states.iterkeys(), key=(lambda key: self.q[(states[key],key)]))
+           maxValue = self.q[(states[actionIndex],actionIndex)]
        else:
-           return None
-
+           actionIndex = 0
+           maxValue = -10000
+       if self.historicAction is not None:
+           tup = (self.historicState, self.historicAction)
+           if tup in self.seen:
+               self.seen[tup] = self.seen[tup] + 1
+           else:
+               self.seen[tup] = 1
+           if self.t % 100 == 0:
+               print str(tup) + "("+str(self.seen[tup])+") times at "+str(self.q[tup])+" y="+(str(prefeatures['playery'])+" p="+str(prefeatures['lowerPipes'][0]['y']) if 'playery' in prefeatures else "0")
+           if self.q[tup] > 0 and reward + self.discount * maxValue < 0:
+               print str(tup)+" is now "+str(reward + self.discount * maxValue)
+           self.q[tup] = reward + self.discount * maxValue;
+       self.historicState = currState
+       self.historicAction = actionIndex
+       return self.actions[actionIndex];
 def simulate(v, events):
     playerx = v['playerx']
     playery = v['playery']
@@ -195,11 +240,11 @@ def simulate(v, events):
         if event is not None and playery > -2 * IMAGES['player'][0].get_height():
             playerVelY = playerFlapAcc
             playerFlapped = True
-
-        crashTest = checkCrash({'x': playerx, 'y': playery, 'index': playerIndex},
+        for playerIndex in [0,1,2]:
+            crashTest = checkCrash({'x': playerx, 'y': playery, 'index': playerIndex},
                                upperPipes, lowerPipes)
-        if crashTest[0]:
-            return {"crashed": True}
+            if crashTest[0]:
+                return {"crashed": True}
         
         basex = -((-basex + 100) % baseShift)
 
@@ -218,13 +263,21 @@ def simulate(v, events):
 
         # add new pipe when first pipe is about to touch left of screen
         
-        if playerx + 50 >= upperPipes[0]['x']:
+        if playerx - 20 >= upperPipes[0]['x']:
             upperPipes[0]['x'] = upperPipes[1]['x']
             upperPipes[0]['y'] = upperPipes[1]['y']
-    return {'upperPipes': upperPipes, 'lowerPipes': lowerPipes, 'x': playerx, 'y': playery, 'playerVelY': playerVelY}
+    return {'playerAccY': playerAccY, 'upperPipes': upperPipes, 'lowerPipes': lowerPipes, 'playerx': playerx, 'playery': playery, 'playerVelY': playerVelY}
 
 def mainGame(movementInfo):
+    global games
     decider = Decider()
+    while True:
+        games = games + 1
+        playIt(movementInfo,decider)
+        decider.t = decider.t + 1
+def playIt(movementInfo,decider):
+    global iters,games
+    itercount = 0
     score = playerIndex = loopIter = 0
     playerIndexGen = movementInfo['playerIndexGen']
     playerx, playery = int(SCREENWIDTH * 0.2), movementInfo['playery']
@@ -259,7 +312,9 @@ def mainGame(movementInfo):
     playerFlapped = False # True when player flaps
 
     while True:
+        eventLog = None
         for event in pygame.event.get():
+            eventLog = event
             if event.type == QUIT or (event.type == KEYDOWN and event.key == K_ESCAPE):
                 pygame.quit()
                 sys.exit()
@@ -271,7 +326,14 @@ def mainGame(movementInfo):
         # check for crash here
         crashTest = checkCrash({'x': playerx, 'y': playery, 'index': playerIndex},
                                upperPipes, lowerPipes)
+        
         if crashTest[0]:
+            print "Crashed!"
+            if not crashTest[1]:
+                print str(playery)+" p="+str(lowerPipes[0]['y'])
+            action = decider.handleActions([eventLog], {'crashed': True})
+            iters = iters + itercount
+            print str(itercount) + "versus " + str(iters/games)
             return {
                 'y': playery,
                 'groundCrash': crashTest[1],
@@ -332,64 +394,13 @@ def mainGame(movementInfo):
         SCREEN.blit(IMAGES['player'][playerIndex], (playerx, playery))
 
         pygame.display.update()
-        worldState = {'x': playerx, 'y': playery, 'basex': basex, 'upperPipes': upperPipes, 'lowerPipes': lowerPipes, 'score': score, 'playerVelY': playerVelY} 
-        action = decider.getAction(worldState, locals())
+        worldState = {'x': playerx, 'y': playery, 'upperPipes': upperPipes, 'lowerPipes': lowerPipes, 'playerVelY': playerVelY} 
+        action = decider.handleActions([eventLog], locals())
+        eventLog = None
         if action is not None:
             pygame.event.post(action)
-            print worldState
-            print action
+        itercount = itercount + 1
         FPSCLOCK.tick(FPS)
-
-
-def showGameOverScreen(crashInfo):
-    """crashes the player down ans shows gameover image"""
-    score = crashInfo['score']
-    playerx = SCREENWIDTH * 0.2
-    playery = crashInfo['y']
-    playerHeight = IMAGES['player'][0].get_height()
-    playerVelY = crashInfo['playerVelY']
-    playerAccY = 2
-
-    basex = crashInfo['basex']
-
-    upperPipes, lowerPipes = crashInfo['upperPipes'], crashInfo['lowerPipes']
-
-    # play hit and die sounds
-    SOUNDS['hit'].play()
-    if not crashInfo['groundCrash']:
-        SOUNDS['die'].play()
-
-    while True:
-        for event in pygame.event.get():
-            if event.type == QUIT or (event.type == KEYDOWN and event.key == K_ESCAPE):
-                pygame.quit()
-                sys.exit()
-            if event.type == KEYDOWN and (event.key == K_SPACE or event.key == K_UP):
-                if playery + playerHeight >= BASEY - 1:
-                    return
-
-        # player y shift
-        if playery + playerHeight < BASEY - 1:
-            playery += min(playerVelY, BASEY - playery - playerHeight)
-
-        # player velocity change
-        if playerVelY < 15:
-            playerVelY += playerAccY
-
-        # draw sprites
-        SCREEN.blit(IMAGES['background'], (0,0))
-
-        for uPipe, lPipe in zip(upperPipes, lowerPipes):
-            SCREEN.blit(IMAGES['pipe'][0], (uPipe['x'], uPipe['y']))
-            SCREEN.blit(IMAGES['pipe'][1], (lPipe['x'], lPipe['y']))
-
-        SCREEN.blit(IMAGES['base'], (basex, BASEY))
-        showScore(score)
-        SCREEN.blit(IMAGES['player'][1], (playerx,playery))
-
-        FPSCLOCK.tick(FPS)
-        pygame.display.update()
-
 
 def playerShm(playerShm):
     """oscillates the value of playerShm['val'] between 8 and -8"""
@@ -463,7 +474,6 @@ def checkCrash(player, upperPipes, lowerPipes):
 
             if uCollide or lCollide:
                 return [True, False]
-
     return [False, False]
 
 def pixelCollision(rect1, rect2, hitmask1, hitmask2):
