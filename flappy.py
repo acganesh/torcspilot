@@ -3,6 +3,7 @@ import random
 import sys
 import operator
 
+from collections import defaultdict
 import copy
 import pygame
 import itertools
@@ -163,20 +164,18 @@ def showWelcomeAnimation():
 class Decider:
     def __init__(self):
         self.t = 0
+        self.flag = False
         self.discount = .95
         self.trace = []
         self.nstate = None
-        self.seen = {}
+        self.seen = defaultdict(lambda: 0)
         self.historicState = None
         self.historicAction = None
         self.actions = [None, pygame.event.Event(KEYDOWN, key = K_UP)]
-        self.states = [i for i in itertools.product(range(-50,250), range(-250,250), range(-15,15))]
-        self.states.append(('crashed',))
-        self.q = {sa : random.random() if sa[1] == 0 else .1*random.random() for sa in itertools.product(self.states, range(0,len(self.actions)))}
-    def handleActions(self, oldAction, prefeatures):
-       if self.historicState is not None and self.historicState[0] == 'crashed':
-           self.historicAction = None
-           self.historicState = None
+        self.q = defaultdict(lambda: 0)
+        self.q[(('crashed',),0)] = -10000
+        self.q[(('crashed',),1)] = -10000
+    def handleActions(self, prefeatures):
        def processGlobalState(state):
            if 'crashed' in state:
                return ('crashed',)
@@ -194,34 +193,55 @@ class Decider:
                Ymetric = 199
            if Ymetric <= -200:
                Ymetric = -199
-           return (int(closePipeOut), int(Ymetric), int(currYVel))
+           return (int(closePipeOut/4), int(currY/4), int(state['lowerPipes'][i]['y']/4), int(currYVel))
        currState = processGlobalState(prefeatures)
-       
-       reward = 1
-       if 'crashed' == currState[0]:
-           reward = -10000
-       if reward != -10000:
-           states = {i : processGlobalState(simulate(prefeatures,[self.actions[i]])) for i in range(0,len(self.actions))} 
-           actionIndex = max(states.iterkeys(), key=(lambda key: self.q[(states[key],key)]))
-           maxValue = self.q[(states[actionIndex],actionIndex)]
-       else:
-           actionIndex = 0
-           maxValue = -10000
-       if self.historicAction is not None:
-           tup = (self.historicState, self.historicAction)
-           if tup in self.seen:
-               self.seen[tup] = self.seen[tup] + 1
+       if self.flag:
+           print currState
+       states = {i : processGlobalState(simulate(prefeatures,[self.actions[i]], lol='y')) for i in range(0,len(self.actions))} 
+       # select state biased towards better choices
+       actionIndex = max(states.iterkeys(), key=(lambda key: self.q[(states[key],key)]))
+       bias =  1.0/(1 + 2 * min([self.seen[(currState, act)] for act in range(0,len(self.actions))]))
+       if random.random() < bias:
+           if random.random() < .08:
+               actionIndex = 1
            else:
-               self.seen[tup] = 1
-           if self.t % 100 == 0:
-               print str(tup) + "("+str(self.seen[tup])+") times at "+str(self.q[tup])+" y="+(str(prefeatures['playery'])+" p="+str(prefeatures['lowerPipes'][0]['y']) if 'playery' in prefeatures else "0")
-           if self.q[tup] > 0 and reward + self.discount * maxValue < 0:
-               print str(tup)+" is now "+str(reward + self.discount * maxValue)
-           self.q[tup] = reward + self.discount * maxValue;
+               actionIndex = 0
+       #compute reward
+       if currState[0] == 'crashed':
+           reward = -10000 #dead
+       else:
+           reward = 1 #alive
+       playerMidPos = prefeatures['playerx'] + IMAGES['player'][0].get_width() / 2
+       for pipe in prefeatures['upperPipes']:
+           pipeMidPos = pipe['x'] + IMAGES['pipe'][0].get_width() / 2
+           if pipeMidPos <= playerMidPos < pipeMidPos + 4:
+               reward = 4000 #good!
+               print "paid out"
+               #self.flag = True
+       #update
+       tup = (currState, actionIndex)
+       maxValue = max([self.q[(states[actionIndex],i)] for i in range(0,len(self.actions))])
+       #if self.q[tup] >= 0 and reward + self.discount * maxValue < 0:
+       #    print str(tup)+" is now "+str(reward + self.discount * maxValue)
+       #if self.q[tup] < 100 and reward + self.discount * maxValue > 100:
+       #    print str(tup)+" is now "+str(reward + self.discount * maxValue)
+       self.q[tup] = reward + self.discount * maxValue
+       self.seen[tup] = self.seen[tup] + 1
+       #if self.historicAction is not None:
+       #    tup = (self.historicState, self.historicAction)
+       #    if tup in self.seen:
+       #        self.seen[tup] = self.seen[tup] + 1
+       #    else:
+       #        self.seen[tup] = 1
+       #    if self.t % 100 == 0:
+       #        print str(tup) + "("+str(self.seen[tup])+") times at "+str(self.q[tup])+" y="+(str(prefeatures['playery'])+" p="+str(prefeatures['lowerPipes'][0]['y']) if 'playery' in prefeatures else "0")
+       #    if self.q[tup] > 0 and reward + self.discount * maxValue < 0:
+       #        print str(tup)+" is now "+str(reward + self.discount * maxValue)
+       #    self.q[tup] = reward + self.discount * maxValue;
        self.historicState = currState
        self.historicAction = actionIndex
        return self.actions[actionIndex];
-def simulate(v, events):
+def simulate(v, events, lol="lol"):
     playerx = v['playerx']
     playery = v['playery']
     playerVelY = v['playerVelY']
@@ -263,7 +283,7 @@ def simulate(v, events):
 
         # add new pipe when first pipe is about to touch left of screen
         
-        if playerx - 20 >= upperPipes[0]['x']:
+        if playerx - 40 >= upperPipes[0]['x']:
             upperPipes[0]['x'] = upperPipes[1]['x']
             upperPipes[0]['y'] = upperPipes[1]['y']
     return {'playerAccY': playerAccY, 'upperPipes': upperPipes, 'lowerPipes': lowerPipes, 'playerx': playerx, 'playery': playery, 'playerVelY': playerVelY}
@@ -272,11 +292,14 @@ def mainGame(movementInfo):
     global games
     decider = Decider()
     while True:
-        games = games + 1
-        playIt(movementInfo,decider)
-        decider.t = decider.t + 1
+        try:
+            games = games + 1
+            playIt(movementInfo,decider)
+            decider.t = decider.t + 1
+        except:
+            print "Exception: ", sys.exc_info()[0]
 def playIt(movementInfo,decider):
-    global iters,games
+    global iters,games,FPS
     itercount = 0
     score = playerIndex = loopIter = 0
     playerIndexGen = movementInfo['playerIndexGen']
@@ -314,26 +337,25 @@ def playIt(movementInfo,decider):
     while True:
         eventLog = None
         for event in pygame.event.get():
-            eventLog = event
-            if event.type == QUIT or (event.type == KEYDOWN and event.key == K_ESCAPE):
-                pygame.quit()
-                sys.exit()
-            if event.type == KEYDOWN and (event.key == K_SPACE or event.key == K_UP):
+            if event.type == KEYDOWN and (event.key == K_UP):
                 if playery > -2 * IMAGES['player'][0].get_height():
                     playerVelY = playerFlapAcc
                     playerFlapped = True
-                    SOUNDS['wing'].play()
+            if event.type == KEYDOWN and (event.key == K_SPACE): 
+                if FPS == 3000:
+                    FPS = 4
+                elif FPS == 4:
+                    FPS = 30
+                else:
+                    FPS = 3000
         # check for crash here
         crashTest = checkCrash({'x': playerx, 'y': playery, 'index': playerIndex},
                                upperPipes, lowerPipes)
         
         if crashTest[0]:
-            print "Crashed!"
-            if not crashTest[1]:
-                print str(playery)+" p="+str(lowerPipes[0]['y'])
-            action = decider.handleActions([eventLog], {'crashed': True})
             iters = iters + itercount
-            print str(itercount) + "versus " + str(iters/games)
+            if itercount > 100:
+                print str(itercount) + "versus " + str(iters/games)
             return {
                 'y': playery,
                 'groundCrash': crashTest[1],
@@ -349,7 +371,8 @@ def playIt(movementInfo,decider):
             pipeMidPos = pipe['x'] + IMAGES['pipe'][0].get_width() / 2
             if pipeMidPos <= playerMidPos < pipeMidPos + 4:
                 score += 1
-                SOUNDS['point'].play()
+                if FPS != 3000:
+                    SOUNDS['point'].play()
 
         # playerIndex basex change
         if (loopIter + 1) % 3 == 0:
@@ -382,21 +405,21 @@ def playIt(movementInfo,decider):
             lowerPipes.pop(0)
 
         # draw sprites
-        SCREEN.blit(IMAGES['background'], (0,0))
+        if FPS != 3000 or (itercount + iters) % 1000 == 0:
+            SCREEN.blit(IMAGES['background'], (0,0))
+       
+            for uPipe, lPipe in zip(upperPipes, lowerPipes):
+                SCREEN.blit(IMAGES['pipe'][0], (uPipe['x'], uPipe['y']))
+                SCREEN.blit(IMAGES['pipe'][1], (lPipe['x'], lPipe['y']))
 
-        for uPipe, lPipe in zip(upperPipes, lowerPipes):
-            SCREEN.blit(IMAGES['pipe'][0], (uPipe['x'], uPipe['y']))
-            SCREEN.blit(IMAGES['pipe'][1], (lPipe['x'], lPipe['y']))
-
-        SCREEN.blit(IMAGES['base'], (basex, BASEY))
+            SCREEN.blit(IMAGES['base'], (basex, BASEY))
         # print score so player overlaps the score
-        showScore(score)
-        SCREEN.blit(IMAGES['player'][playerIndex], (playerx, playery))
+            showScore(score)
+            SCREEN.blit(IMAGES['player'][playerIndex], (playerx, playery))
 
-        pygame.display.update()
+            pygame.display.update()
         worldState = {'x': playerx, 'y': playery, 'upperPipes': upperPipes, 'lowerPipes': lowerPipes, 'playerVelY': playerVelY} 
-        action = decider.handleActions([eventLog], locals())
-        eventLog = None
+        action = decider.handleActions(locals())
         if action is not None:
             pygame.event.post(action)
         itercount = itercount + 1
