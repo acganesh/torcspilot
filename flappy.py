@@ -16,7 +16,7 @@ FPS = 3000
 SCREENWIDTH  = 288
 SCREENHEIGHT = 512
 # amount by which base can maximum shift to left
-PIPEGAPSIZE  = 100 # gap between upper and lower part of pipe
+PIPEGAPSIZE  = 200 # gap between upper and lower part of pipe
 BASEY        = SCREENHEIGHT * 0.79
 # image, sound and hitmask  dicts
 IMAGES, SOUNDS, HITMASKS = {}, {}, {}
@@ -165,18 +165,25 @@ class Decider:
     def __init__(self):
         self.t = 0
         self.flag = False
-        self.discount = .95
+        self.discount = 1.0
         self.trace = []
         self.nstate = None
         self.seen = defaultdict(lambda: 0)
         self.historicState = None
         self.historicAction = None
         self.actions = [None, pygame.event.Event(KEYDOWN, key = K_UP)]
-        self.q = defaultdict(lambda: -39.2) #exp value of bad path
+        self.q = defaultdict(lambda: 0) #exp value of bad path
         self.q[(('crashed',),0)] = -10000
         self.q[(('crashed',),1)] = -10000
+
+    # Prefeature vector -- all inputs
     def handleActions(self, prefeatures):
        def processGlobalState(state):
+           # Gives you a tuple of the four key pieces of information
+           # currY
+           # currYVel
+           # Delta to lower pipe
+           # Y of pipe
            if 'crashed' in state:
                return ('crashed',)
            i = 0
@@ -191,9 +198,14 @@ class Decider:
            #    currY = 0
            #if closePipeOut >= 200:
            #    closePipeOut = 199
-           closePipeOut = int(closePipeOut/4)
-           currY = int(currY/4)
-           lowerPipe = int(lowerPipe/4)
+
+           closePipeOut = int(closePipeOut)
+           currY = int(currY)
+           lowerPipe = int(lowerPipe)
+
+           # closePipeOut = int(closePipeOut/4)
+           #currY = int(currY/4)
+           # lowerPipe = int(lowerPipe/4)
            return (closePipeOut, currY, lowerPipe, int(currYVel))
        currState = processGlobalState(prefeatures)
        if self.flag:
@@ -201,7 +213,7 @@ class Decider:
        states = {i : processGlobalState(simulate(prefeatures,[self.actions[i]], lol='y')) for i in range(0,len(self.actions))} 
        # select state biased towards better choices
        actionIndex = max(states.iterkeys(), key=(lambda key: self.q[(states[key],key)]))
-       bias = 0.14 #1.0/(1 + 2 * min([self.seen[(currState, act)] for act in range(0,len(self.actions))]))
+       bias = 1.0 #1.0/(1 + 2 * min([self.seen[(currState, act)] for act in range(0,len(self.actions))]))
        global FPS
        if FPS == 30:
            print "At ",currState,":"
@@ -211,14 +223,14 @@ class Decider:
            actionIndex = random.choice([0, 1])
        #compute reward
        if currState[0] == 'crashed':
-           reward = -10000 #dead
+           reward = -100000 #dead
        else:
            reward = 1 #alive
        playerMidPos = prefeatures['playerx'] + IMAGES['player'][0].get_width() / 2
        for pipe in prefeatures['upperPipes']:
            pipeMidPos = pipe['x'] + IMAGES['pipe'][0].get_width() / 2
            if pipeMidPos - 20 <= playerMidPos < pipeMidPos + 4 - 20:
-               reward = 4000 #good!
+               reward = 1 #good!
                print "nothresh paid out ",currState
                #self.flag = True
        #update
@@ -309,16 +321,15 @@ def playIt(movementInfo,decider):
 
     # list of upper pipes
     upperPipes = [
-        {'x': SCREENWIDTH + 200, 'y': newPipe1[0]['y']},
-        {'x': SCREENWIDTH + 200 + (SCREENWIDTH / 2), 'y': newPipe2[0]['y']},
+        {'x': 150, 'y': newPipe1[0]['y']},
+        {'x': 150 + (SCREENWIDTH / 2), 'y': newPipe2[0]['y']},
     ]
 
     # list of lowerpipe
     lowerPipes = [
-        {'x': SCREENWIDTH + 200, 'y': newPipe1[1]['y']},
-        {'x': SCREENWIDTH + 200 + (SCREENWIDTH / 2), 'y': newPipe2[1]['y']},
+        {'x': 150, 'y': newPipe1[1]['y']},
+        {'x': 150 + (SCREENWIDTH / 2), 'y': newPipe2[1]['y']},
     ]
-
     pipeVelX = -4
 
     # player velocity, max velocity, downward accleration, accleration on flap
@@ -434,8 +445,9 @@ def playerShm(playerShm):
 def getRandomPipe():
     """returns a randomly generated pipe"""
     # y of gap between upper and lower pipe
-    gapY = random.randrange(0, int(BASEY * 0.6 - PIPEGAPSIZE))
-    gapY += int(BASEY * 0.2)
+    #gapY = random.randrange(0, int(BASEY * 0.6 - PIPEGAPSIZE))
+    #gapY += int(BASEY * 0.2)
+    gapY = 150
     pipeHeight = IMAGES['pipe'][0].get_height()
     pipeX = SCREENWIDTH + 10
 
