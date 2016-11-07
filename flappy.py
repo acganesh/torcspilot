@@ -172,7 +172,7 @@ class Decider:
         self.historicState = None
         self.historicAction = None
         self.actions = [None, pygame.event.Event(KEYDOWN, key = K_UP)]
-        self.q = defaultdict(lambda: 0)
+        self.q = defaultdict(lambda: -39.2) #exp value of bad path
         self.q[(('crashed',),0)] = -10000
         self.q[(('crashed',),1)] = -10000
     def handleActions(self, prefeatures):
@@ -185,27 +185,30 @@ class Decider:
            closePipeOut = state['upperPipes'][i]['x'] - state['playerx']
            currY = state['playery']
            currYVel = state['playerVelY']
-           currAcc = state['playerAccY']
-           Ymetric = currY - state['lowerPipes'][i]['y']
-           if closePipeOut >= 200:
-               closePipeOut = 199
-           if Ymetric >= 200:
-               Ymetric = 199
-           if Ymetric <= -200:
-               Ymetric = -199
-           return (int(closePipeOut/4), int(currY/4), int(state['lowerPipes'][i]['y']/4), int(currYVel))
+           lowerPipe = int(state['lowerPipes'][i]['y']) #delta
+           #threshold
+           #if currY <= 0:
+           #    currY = 0
+           #if closePipeOut >= 200:
+           #    closePipeOut = 199
+           closePipeOut = int(closePipeOut/4)
+           currY = int(currY/4)
+           lowerPipe = int(lowerPipe/4)
+           return (closePipeOut, currY, lowerPipe, int(currYVel))
        currState = processGlobalState(prefeatures)
        if self.flag:
            print currState
        states = {i : processGlobalState(simulate(prefeatures,[self.actions[i]], lol='y')) for i in range(0,len(self.actions))} 
        # select state biased towards better choices
        actionIndex = max(states.iterkeys(), key=(lambda key: self.q[(states[key],key)]))
-       bias =  1.0/(1 + 2 * min([self.seen[(currState, act)] for act in range(0,len(self.actions))]))
-       if random.random() < bias:
-           if random.random() < .08:
-               actionIndex = 1
-           else:
-               actionIndex = 0
+       bias = 0.14 #1.0/(1 + 2 * min([self.seen[(currState, act)] for act in range(0,len(self.actions))]))
+       global FPS
+       if FPS == 30:
+           print "At ",currState,":"
+           for i in range(0,len(self.actions)):
+               print i,"->",states[i]," (cost: ",self.q[(states[i],0)]," seen ",self.seen[(states[i],0)]," and ",self.q[(states[i],1)],"seen ",self.seen[(states[i],1)],")"
+       elif random.random() < bias:
+           actionIndex = random.choice([0, 1])
        #compute reward
        if currState[0] == 'crashed':
            reward = -10000 #dead
@@ -214,9 +217,9 @@ class Decider:
        playerMidPos = prefeatures['playerx'] + IMAGES['player'][0].get_width() / 2
        for pipe in prefeatures['upperPipes']:
            pipeMidPos = pipe['x'] + IMAGES['pipe'][0].get_width() / 2
-           if pipeMidPos <= playerMidPos < pipeMidPos + 4:
+           if pipeMidPos - 20 <= playerMidPos < pipeMidPos + 4 - 20:
                reward = 4000 #good!
-               print "paid out"
+               print "nothresh paid out ",currState
                #self.flag = True
        #update
        tup = (currState, actionIndex)
@@ -225,19 +228,11 @@ class Decider:
        #    print str(tup)+" is now "+str(reward + self.discount * maxValue)
        #if self.q[tup] < 100 and reward + self.discount * maxValue > 100:
        #    print str(tup)+" is now "+str(reward + self.discount * maxValue)
-       self.q[tup] = reward + self.discount * maxValue
+       self.q[tup] = self.q[tup] + bias*(reward + self.discount * maxValue - self.q[tup])
+       if FPS == 30:
+           print tup," revalued to ",self.q[tup]
+       #print tup, "has value", self.q[tup]
        self.seen[tup] = self.seen[tup] + 1
-       #if self.historicAction is not None:
-       #    tup = (self.historicState, self.historicAction)
-       #    if tup in self.seen:
-       #        self.seen[tup] = self.seen[tup] + 1
-       #    else:
-       #        self.seen[tup] = 1
-       #    if self.t % 100 == 0:
-       #        print str(tup) + "("+str(self.seen[tup])+") times at "+str(self.q[tup])+" y="+(str(prefeatures['playery'])+" p="+str(prefeatures['lowerPipes'][0]['y']) if 'playery' in prefeatures else "0")
-       #    if self.q[tup] > 0 and reward + self.discount * maxValue < 0:
-       #        print str(tup)+" is now "+str(reward + self.discount * maxValue)
-       #    self.q[tup] = reward + self.discount * maxValue;
        self.historicState = currState
        self.historicAction = actionIndex
        return self.actions[actionIndex];
@@ -354,7 +349,7 @@ def playIt(movementInfo,decider):
         
         if crashTest[0]:
             iters = iters + itercount
-            if itercount > 100:
+            if itercount > 140:
                 print str(itercount) + "versus " + str(iters/games)
             return {
                 'y': playery,
