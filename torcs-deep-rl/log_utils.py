@@ -24,7 +24,7 @@ class TORCS_ExperimentLogger:
         logging.basicConfig(filename=self.logname,
                             filemode='a',
                             format='%(asctime)s,%(message)s',
-                            datefmt='%m-%d-%Y %H:%M:%S',
+                            datefmt='%m-%d-%Y;%H:%M:%S',
                             level=logging.INFO)
 
         self.logger = logging.getLogger("TORCS Experiment Logger")
