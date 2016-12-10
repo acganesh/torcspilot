@@ -34,7 +34,7 @@ class TORCS_ExperimentLogger:
     def log(self, observation, action, reward, loss):
         if self.header_needed:
             with open(self.logname, 'wb') as f:
-                f.write("time,focus,speedX,speedY,speedZ,angle,damage,opponents,rpm,track,trackPos,wheelSpinVel,steering,accel,brake,reward,loss\n")
+                f.write("time,focus,speedX,speedY,speedZ,angle,damage,opponents,rpm,track,trackPos,wheelSpinVel,steering,accel,brake,reward,loss,\n")
             self.header_needed = False
 
 
@@ -45,7 +45,7 @@ class TORCS_ExperimentLogger:
         length = len(keys) + len(action) + 2
 
         vals = np.concatenate(([getattr(observation, k) for k in keys], action, [reward, loss]))
-        msg = '%s,'*length % tuple(vals)
+        msg = ('%s,'*length) % tuple(vals)
         self.logger.log(logging.INFO, msg)
 
 
