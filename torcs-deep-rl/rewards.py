@@ -22,5 +22,5 @@ def lng_trans(obs):
     # Track distance
     trackPos = np.array(obs.trackPos)
     angle = obs.angle
-    reward = speedX * np.cos(angle) - np.abs(speedX * np.sin(angle)) - np.abs(speedX * trackPos)
+    reward = speedX * np.cos(angle) - np.abs(speedX * np.sin(angle)) - np.abs(speedX) * angle
     return reward
