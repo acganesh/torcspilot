@@ -7,6 +7,7 @@ from keras import backend as K
 import json
 import traceback
 import sys
+import random
 
 from gym_torcs import TorcsEnv
 
@@ -14,11 +15,12 @@ from exploration import OrnsteinUhlenbeck
 from models import ActorFCNet, CriticFCNet
 from rewards import lng_trans
 from replay_buffer import ReplayBuffer
+from log_utils import TORCS_ExperimentLogger
 
 EXPERIMENTS_PATH = "./experiments/"
 OU = OrnsteinUhlenbeck()
 
-def main(is_training=0):
+def main(is_training):
     BUFFER_SIZE = 100000
     BATCH_SIZE = 32
     GAMMA = 0.99
@@ -39,6 +41,8 @@ def main(is_training=0):
     step = 0
     epsilon = 1
 
+    exp_logger = TORCS_ExperimentLogger("train_convergence_12-10-16")
+
     # TensorFlow GPU
     config = tf.ConfigProto()
     # Not sure if this is really necessary, since we only have a single GPU
@@ -54,17 +58,19 @@ def main(is_training=0):
     env = TorcsEnv(vision=vision, throttle=True, gear_change=False)
 
     # Weight loading
-    try:
-        actor.model.load_weights("%s/starter_weights/actormodel.h5" % EXPERIMENTS_PATH)
-        critic.model.load_weights("%s/starter_weights/criticmodel.h5" % EXPERIMENTS_PATH)
-        actor.target_model.load_weights("%s/starter_weights/actormodel.h5" % EXPERIMENTS_PATH)
-        critic.target_model.load_weights("%s/starter_weights/criticmodel.h5" % EXPERIMENTS_PATH)
-        print "Weights loaded successfully"
-    except:
-        print "Error in loading weights"
-        print '-'*60
-        traceback.print_exc(file=sys.stdout)
-        print '-'*60
+    if not is_training:
+        try:
+            actor.model.load_weights("%s/starter_weights/actormodel.h5" % EXPERIMENTS_PATH)
+            critic.model.load_weights("%s/starter_weights/criticmodel.h5" % EXPERIMENTS_PATH)
+            actor.target_model.load_weights("%s/starter_weights/actormodel.h5" % EXPERIMENTS_PATH)
+            critic.target_model.load_weights("%s/starter_weights/criticmodel.h5" % EXPERIMENTS_PATH)
+            print "Weights loaded successfully"
+        except:
+            print "Error in loading weights"
+            print '-'*60
+            traceback.print_exc(file=sys.stdout)
+            print '-'*60
+            assert(False)
 
     for i in xrange(episode_count):
         print "Episode: %i; Replay Buffer: %i" % (i, buff.count())
@@ -81,7 +87,7 @@ def main(is_training=0):
         # Compute rewards
         for j in xrange(max_steps):
             loss = 0
-            epsilon -= 1.0 / EXPLORE # exploration factor
+            epsilon -= 2.0 / EXPLORE # exploration factor
             action_t = np.zeros([1, action_dim])
             noise_t = np.zeros([1, action_dim])
 
@@ -92,10 +98,9 @@ def main(is_training=0):
             noise_t[0][2] = is_training * max(epsilon, 0) * OU.run(action_t_raw[0][2], -0.1, 1.00, 0.05)
 
             # stochastic brake
-            """
             if random.random() <= 0.1:
                 noise_t[0][2] = is_training * max(epsilon, 0) * OU.run(action_t_raw[0][2], 0.2, 1.00, 0.10)
-            """
+ 
 
             # May be able to do this a bit more concisely with NumPy vectorization
             action_t[0][0] = action_t_raw[0][0] + noise_t[0][0]
@@ -137,6 +142,9 @@ def main(is_training=0):
                 actor.train_target_net()
                 critic.train_target_net()
 
+
+            exp_logger.log(ob, action_t[0], reward_t, loss) 
+
             total_reward += reward_t
             state_t = state_t1
 
@@ -165,4 +173,4 @@ def main(is_training=0):
     print("Finish.")
 
 if __name__ == "__main__":
-    main(0) 
+    main(is_training=1) 

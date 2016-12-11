@@ -1,4 +1,5 @@
 import logging
+import datetime
 import os
 import collections
 import numpy as np
@@ -33,27 +34,33 @@ class TORCS_ExperimentLogger:
 
     def log(self, observation, action, reward, loss):
         if self.header_needed:
-            with open(self.logname, 'wb') as f:
-                f.write("time,focus,speedX,speedY,speedZ,angle,damage,opponents,rpm,track,trackPos,wheelSpinVel,steering,accel,brake,reward,loss,\n")
+            with open(self.logname, 'w') as f:
+                f.write("time,speedX,speedY,speedZ,angle,damage,rpm,trackPos,steering,accel,brake,reward,loss,\n")
             self.header_needed = False
 
 
         # Keys in gym_torcs Observation object
-        keys = ('focus', 'speedX', 'speedY', 'speedZ', 'angle', 'damage', 'opponents', 'rpm', 'track', 'trackPos', 'wheelSpinVel')
+        # Removed track and oppponents for now
+        keys = ('speedX', 'speedY', 'speedZ', 'angle', 'damage', 'rpm', 'trackPos')
 
         # Log should contain keys, actions, reward, and loss
         length = len(keys) + len(action) + 2
 
         vals = np.concatenate(([getattr(observation, k) for k in keys], action, [reward, loss]))
         msg = ('%s,'*length) % tuple(vals)
-        self.logger.log(logging.INFO, msg)
+        with open(self.logname, 'a') as f:
+            time=datetime.datetime.now().strftime("%H:%M;%m-%d-%y")
+            f.write(time+',')
+            f.write(msg)
+            f.write('\n')
+        #self.logger.log(logging.INFO, msg)
 
 
 def logger_example():
     """
     Basic example that demonstrates how to use TORCS_ExperimentLogger.
     """
-    logger = TORCS_ExperimentLogger("test_experiment") 
+    exp_logger = TORCS_ExperimentLogger("test_experiment2") 
     names = ['focus',
              'speedX', 'speedY', 'speedZ', 'angle', 'damage',
              'opponents',
