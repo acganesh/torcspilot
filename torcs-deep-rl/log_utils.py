@@ -10,11 +10,15 @@ class TORCS_ExperimentLogger:
     """
     Logs TORCS experiments, given observation, action, reward, and loss.
     """
-    def __init__(self, experiment_name):
-        directory = "%s%s/" % (EXPERIMENTS_PATH, experiment_name)
+    def __init__(self, directory, experiment_name):
+        #directory = "%s%s/" % (EXPERIMENTS_PATH, experiment_name)
 
         if not os.path.exists(directory):
             os.makedirs(directory)
+        else:
+            print "Experiment already exists!  Press c to continue"
+            import pdb; pdb.set_trace()
+            # assert(False)
         """
         else:
             print 'Experiment already exists!'

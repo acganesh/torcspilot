@@ -8,6 +8,8 @@ import json
 import traceback
 import sys
 import random
+import click
+import time
 
 from gym_torcs import TorcsEnv
 
@@ -17,10 +19,30 @@ from rewards import lng_trans
 from replay_buffer import ReplayBuffer
 from log_utils import TORCS_ExperimentLogger
 
-EXPERIMENTS_PATH = "./experiments/"
-OU = OrnsteinUhlenbeck()
 
-def main(is_training):
+#@click.command()
+#@click.option("--train", required=True, help="0 or 1: flag to enable training the network")
+#@click.option("--experiment", required=True, help="Specify the name of the current experiment, for logging and model persistence")
+
+
+config = {'train': 0,
+          'network': 'FCNetA',
+          'experiment_name': 'aalborg_trial2',
+          'EXPERIMENTS_PATH': './experiments/'}
+
+def main(config):
+    train = config['train']
+    network = config['network']
+    experiment_name = config['experiment_name']
+    EXPERIMENTS_PATH = config['EXPERIMENTS_PATH']
+
+    actor_weights_file = "%s%s/%s_actor.h5" % (EXPERIMENTS_PATH, network, network)
+    critic_weights_file = "%s%s/%s_critic.h5" % (EXPERIMENTS_PATH, network, network)
+
+    log_directory = "%s%s/%s/" % (EXPERIMENTS_PATH, network, experiment_name)
+
+    OU = OrnsteinUhlenbeck()
+
     BUFFER_SIZE = 100000
     BATCH_SIZE = 32
     GAMMA = 0.99
@@ -41,7 +63,11 @@ def main(is_training):
     step = 0
     epsilon = 1
 
-    exp_logger = TORCS_ExperimentLogger("train_convergence_12-10-16")
+    exp_logger = TORCS_ExperimentLogger(log_directory, experiment_name)
+
+    #directory = "%s%s/" % (EXPERIMENTS_PATH, experiment)
+    #actor_weights_file = "%s%s_%s" % (directory, experiment, "actor.h5")
+    #critic_weights_file = "%s%s_%s" % (directory, experiment, "critic.h5")
 
     # TensorFlow GPU
     config = tf.ConfigProto()
@@ -58,13 +84,14 @@ def main(is_training):
     env = TorcsEnv(vision=vision, throttle=True, gear_change=False)
 
     # Weight loading
-    if not is_training:
+    if not train:
         try:
-            actor.model.load_weights("%s/starter_weights/actormodel.h5" % EXPERIMENTS_PATH)
-            critic.model.load_weights("%s/starter_weights/criticmodel.h5" % EXPERIMENTS_PATH)
-            actor.target_model.load_weights("%s/starter_weights/actormodel.h5" % EXPERIMENTS_PATH)
-            critic.target_model.load_weights("%s/starter_weights/criticmodel.h5" % EXPERIMENTS_PATH)
+            actor.model.load_weights(actor_weights_file)
+            critic.model.load_weights(critic_weights_file)
+            actor.target_model.load_weights(actor_weights_file)
+            critic.target_model.load_weights(critic_weights_file)
             print "Weights loaded successfully"
+            time.sleep(2)
         except:
             print "Error in loading weights"
             print '-'*60
@@ -93,13 +120,13 @@ def main(is_training):
 
             action_t_raw = actor.model.predict(state_t.reshape(1, state_t.shape[0])) # this call to reshape seems suboptimal
 
-            noise_t[0][0] = is_training * max(epsilon, 0) * OU.run(action_t_raw[0][0], 0.0, 0.60, 0.30)
-            noise_t[0][1] = is_training * max(epsilon, 0) * OU.run(action_t_raw[0][1], 0.5, 1.00, 0.10)
-            noise_t[0][2] = is_training * max(epsilon, 0) * OU.run(action_t_raw[0][2], -0.1, 1.00, 0.05)
+            noise_t[0][0] = train * max(epsilon, 0) * OU.run(action_t_raw[0][0], 0.0, 0.60, 0.30)
+            noise_t[0][1] = train * max(epsilon, 0) * OU.run(action_t_raw[0][1], 0.5, 1.00, 0.10)
+            noise_t[0][2] = train * max(epsilon, 0) * OU.run(action_t_raw[0][2], -0.1, 1.00, 0.05)
 
             # stochastic brake
             if random.random() <= 0.1:
-                noise_t[0][2] = is_training * max(epsilon, 0) * OU.run(action_t_raw[0][2], 0.2, 1.00, 0.10)
+                noise_t[0][2] = train * max(epsilon, 0) * OU.run(action_t_raw[0][2], 0.2, 1.00, 0.10)
  
 
             # May be able to do this a bit more concisely with NumPy vectorization
@@ -134,7 +161,7 @@ def main(is_training):
                 else:
                     y_t[k] = rewards[k] + GAMMA*target_q_values[k]
 
-            if (is_training):
+            if (train):
                 loss += critic.model.train_on_batch([states, actions], y_t)
                 a_for_grad = actor.model.predict(states)
                 grads = critic.gradients(states, a_for_grad)
@@ -155,13 +182,13 @@ def main(is_training):
                 break
 
         if np.mod(i, 3) == 0:
-            if (is_training):
+            if (train):
                 print("Now we save model")
-                actor.model.save_weights("actormodel.h5", overwrite=True)
+                actor.model.save_weights(actor_weights_file, overwrite=True)
                 with open("actormodel.json", "w") as outfile:
                     json.dump(actor.model.to_json(), outfile)
 
-                critic.model.save_weights("criticmodel.h5", overwrite=True)
+                critic.model.save_weights(critic_weights_file, overwrite=True)
                 with open("criticmodel.json", "w") as outfile:
                     json.dump(critic.model.to_json(), outfile)
 
@@ -173,4 +200,4 @@ def main(is_training):
     print("Finish.")
 
 if __name__ == "__main__":
-    main(is_training=1) 
+    main(config) 
