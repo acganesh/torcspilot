@@ -50,6 +50,11 @@ def main(config):
     LRA = 0.0001
     LRC = 0.001
 
+    XVELEPS = 0.02
+    XVELTERM = 20 # terminate after XVELTERM rounds of xvel < XVELEPS
+    LOSSEPS = 20
+    LOSSLIMITTERM = 0.001 # if LOSS differs by less than LOSSEPS for LOSSLIMITTERM iterations, terminate run.
+
     action_dim = 3  # Steering / Acceleration / Blake
     state_dim = 29  # Dimension of sensor inputs
 
@@ -99,6 +104,9 @@ def main(config):
             print '-'*60
             assert(False)
 
+    cached_loss = 0
+    loss_limit_count = 0
+    loss_done = False
     for i in xrange(episode_count):
         print "Episode: %i; Replay Buffer: %i" % (i, buff.count())
 
@@ -111,6 +119,7 @@ def main(config):
         state_t = np.hstack((ob.angle, ob.track, ob.trackPos, ob.speedX, ob.speedY, ob.speedZ, ob.wheelSpinVel/100.0, ob.rpm))
 
         total_reward = 0.
+        novelcounter = 0
         # Compute rewards
         for j in xrange(max_steps):
             loss = 0
@@ -137,6 +146,13 @@ def main(config):
             # Raw_reward_t is the raw reward computed by the gym_torcs script.
             # We will compute our own reward metric from the ob object 
             ob, raw_reward_t, done, info = env.step(action_t[0])
+						# Check if we have been stationary for many iterations
+            if ob.speedX < XVELEPS:
+                novelcounter++
+                if novelcounter >= XVELTERM:
+                    done = True
+            else:
+                novelcounter = 0
 
             state_t1 = np.hstack((ob.angle, ob.track, ob.trackPos, ob.speedX, ob.speedY, ob.speedZ, ob.wheelSpinVel/100.0, ob.rpm))
             reward_t = lng_trans(ob)
@@ -168,6 +184,13 @@ def main(config):
                 actor.train(states, grads)
                 actor.train_target_net()
                 critic.train_target_net()
+                if abs(loss - cached_loss) < LOSSEPS:
+                    loss_limit_count++
+                    if loss_limit_count > LOSSLIMITTERM:
+                        loss_done = True
+                        done = True
+                else:
+                    loss_limit_count = 0
 
 
             exp_logger.log(ob, action_t[0], reward_t, loss) 
@@ -181,7 +204,7 @@ def main(config):
             if done:
                 break
 
-        if np.mod(i, 3) == 0:
+        if np.mod(i, 3) == 0 or loss_done:
             if (train):
                 print("Now we save model")
                 actor.model.save_weights(actor_weights_file, overwrite=True)
@@ -195,6 +218,8 @@ def main(config):
         print("TOTAL REWARD @ " + str(i) +"-th Episode  : Reward " + str(total_reward))
         print("Total Step: " + str(step))
         print("")
+        if loss_done:
+            break;
 
     env.end()  # This is for shutting down TORCS
     print("Finish.")
