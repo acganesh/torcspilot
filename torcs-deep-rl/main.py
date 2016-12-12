@@ -27,7 +27,7 @@ from log_utils import TORCS_ExperimentLogger
 
 config = {'train': 0,
           'network': 'FCNetA',
-          'experiment_name': 'aalborg_trial2',
+          'experiment_name': 'alpine1',
           'EXPERIMENTS_PATH': './experiments/'}
 
 def main(config):
@@ -53,7 +53,7 @@ def main(config):
     action_dim = 3  # Steering / Acceleration / Blake
     state_dim = 29  # Dimension of sensor inputs
 
-    np.random.seed(42)
+    #np.random.seed(42)
 
     vision = False
     EXPLORE = 100000.
