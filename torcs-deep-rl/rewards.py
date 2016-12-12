@@ -24,3 +24,16 @@ def lng_trans(obs):
     angle = obs.angle
     reward = speedX * np.cos(angle) - np.abs(speedX * np.sin(angle)) - np.abs(speedX * trackPos)
     return reward
+
+def lng_trans_prime(obs):
+    """
+    Reward longitudal velocity projected on track axis,
+    with a penality for transverse velocity.
+    """
+    speedX = np.array(obs.speedX)
+    # Track distance
+    trackPos = np.array(obs.trackPos)
+    angle = obs.angle
+    reward = speedX * np.cos(angle) - np.abs(speedX * np.sin(angle)) - np.abs(speedX * angle)
+    return reward
+
