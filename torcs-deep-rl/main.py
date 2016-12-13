@@ -25,9 +25,9 @@ from log_utils import TORCS_ExperimentLogger
 #@click.option("--experiment", required=True, help="Specify the name of the current experiment, for logging and model persistence")
 
 
-config = {'train': 0,
-          'network': 'FCNetA',
-          'experiment_name': 'alpine1',
+config = {'train': 1,
+          'network': 'FCNetF',
+          'experiment_name': 'aalborg',
           'EXPERIMENTS_PATH': './experiments/'}
 
 def main(config):
@@ -114,7 +114,7 @@ def main(config):
         # Compute rewards
         for j in xrange(max_steps):
             loss = 0
-            epsilon -= 2.0 / EXPLORE # exploration factor
+            epsilon -= 1.0 / EXPLORE # exploration factor
             action_t = np.zeros([1, action_dim])
             noise_t = np.zeros([1, action_dim])
 
@@ -125,8 +125,8 @@ def main(config):
             noise_t[0][2] = train * max(epsilon, 0) * OU.run(action_t_raw[0][2], -0.1, 1.00, 0.05)
 
             # stochastic brake
-            if random.random() <= 0.1:
-                noise_t[0][2] = train * max(epsilon, 0) * OU.run(action_t_raw[0][2], 0.2, 1.00, 0.10)
+            #if random.random() <= 0.1:
+            #    noise_t[0][2] = train * max(epsilon, 0) * OU.run(action_t_raw[0][2], 0.2, 1.00, 0.10)
  
 
             # May be able to do this a bit more concisely with NumPy vectorization
@@ -185,12 +185,10 @@ def main(config):
             if (train):
                 print("Now we save model")
                 actor.model.save_weights(actor_weights_file, overwrite=True)
-                with open("actormodel.json", "w") as outfile:
-                    json.dump(actor.model.to_json(), outfile)
+                #with open("actormodel.json", "w") as outfile: json.dump(actor.model.to_json(), outfile)
 
                 critic.model.save_weights(critic_weights_file, overwrite=True)
-                with open("criticmodel.json", "w") as outfile:
-                    json.dump(critic.model.to_json(), outfile)
+                #with open("criticmodel.json", "w") as outfile: json.dump(critic.model.to_json(), outfile)
 
         print("TOTAL REWARD @ " + str(i) +"-th Episode  : Reward " + str(total_reward))
         print("Total Step: " + str(step))
