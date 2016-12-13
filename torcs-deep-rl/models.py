@@ -96,7 +96,7 @@ class CriticFCNet():
         weights = self.model.get_weights()
         target_weights = self.target_model.get_weights()
         for i in xrange(len(weights)):
-            target_weights[i] = self.TAU * weights[i] + (1 - self.TAU) * weights[i]
+            target_weights[i] = self.TAU * weights[i] + (1 - self.TAU) * target_weights[i]
         self.target_model.set_weights(target_weights)
 
     def build_model(self, state_size, action_dim):

@@ -24,12 +24,6 @@ from log_utils import TORCS_ExperimentLogger
 #@click.option("--train", required=True, help="0 or 1: flag to enable training the network")
 #@click.option("--experiment", required=True, help="Specify the name of the current experiment, for logging and model persistence")
 
-
-config = {'train': 0,
-          'network': 'FCNetA',
-          'experiment_name': 'alpine1',
-          'EXPERIMENTS_PATH': './experiments/'}
-
 def main(config):
     train = config['train']
     network = config['network']
@@ -52,8 +46,8 @@ def main(config):
 
     XVELEPS = 0.02
     XVELTERM = 20 # terminate after XVELTERM rounds of xvel < XVELEPS
-    LOSSEPS = 20
-    LOSSLIMITTERM = 0.001 # if LOSS differs by less than LOSSEPS for LOSSLIMITTERM iterations, terminate run.
+    LOSSEPS = .001
+    LOSSLIMITTERM = 20 # if LOSS differs by less than LOSSEPS for LOSSLIMITTERM iterations, terminate run.
 
     action_dim = 3  # Steering / Acceleration / Blake
     state_dim = 29  # Dimension of sensor inputs
@@ -148,7 +142,7 @@ def main(config):
             ob, raw_reward_t, done, info = env.step(action_t[0])
 						# Check if we have been stationary for many iterations
             if ob.speedX < XVELEPS:
-                novelcounter++
+                novelcounter += 1
                 if novelcounter >= XVELTERM:
                     done = True
             else:
@@ -185,7 +179,7 @@ def main(config):
                 actor.train_target_net()
                 critic.train_target_net()
                 if abs(loss - cached_loss) < LOSSEPS:
-                    loss_limit_count++
+                    loss_limit_count += 1
                     if loss_limit_count > LOSSLIMITTERM:
                         loss_done = True
                         done = True
@@ -225,4 +219,8 @@ def main(config):
     print("Finish.")
 
 if __name__ == "__main__":
+    config = {'train': 1,
+              'network': 'FCNet_terminate_A',
+              'experiment_name': 'aalborg_inference',
+              'EXPERIMENTS_PATH': './experiments/'}
     main(config) 
