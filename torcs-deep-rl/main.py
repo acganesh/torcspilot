@@ -139,7 +139,8 @@ def main(config):
             ob, raw_reward_t, done, info = env.step(action_t[0])
 
             state_t1 = np.hstack((ob.angle, ob.track, ob.trackPos, ob.speedX, ob.speedY, ob.speedZ, ob.wheelSpinVel/100.0, ob.rpm))
-            reward_t = lng_trans(ob)
+            #reward_t = lng_trans(ob)
+            reward_t = raw_reward_t
 
             buff.add(state_t, action_t[0], reward_t, state_t1, done)  # Add replay buffer
 
