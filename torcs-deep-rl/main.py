@@ -3,7 +3,6 @@
 
 import tensorflow as tf
 import numpy as np
-from keras import backend as K
 import json
 import traceback
 import sys
@@ -25,23 +24,23 @@ from log_utils import TORCS_ExperimentLogger
 #@click.option("--experiment", required=True, help="Specify the name of the current experiment, for logging and model persistence")
 
 
-config = {'train': 1,
-          'network': 'FCNetI',
+OU = OrnsteinUhlenbeck()
+
+config_dict = {'train': 1,
+          'network': 'FCNetK',
           'experiment_name': 'aalborg',
           'EXPERIMENTS_PATH': './experiments/'}
 
-def main(config):
-    train = config['train']
-    network = config['network']
-    experiment_name = config['experiment_name']
-    EXPERIMENTS_PATH = config['EXPERIMENTS_PATH']
+def main(config_dict):
+    train = config_dict['train']
+    network = config_dict['network']
+    experiment_name = config_dict['experiment_name']
+    EXPERIMENTS_PATH = config_dict['EXPERIMENTS_PATH']
 
     actor_weights_file = "%s%s/%s_actor.h5" % (EXPERIMENTS_PATH, network, network)
     critic_weights_file = "%s%s/%s_critic.h5" % (EXPERIMENTS_PATH, network, network)
 
     log_directory = "%s%s/%s/" % (EXPERIMENTS_PATH, network, experiment_name)
-
-    OU = OrnsteinUhlenbeck()
 
     BUFFER_SIZE = 100000
     BATCH_SIZE = 32
@@ -75,6 +74,7 @@ def main(config):
     config.gpu_options.allow_growth = True
     sess = tf.Session(config=config)
 
+    from keras import backend as K
     K.set_session(sess)
 
     actor = ActorFCNet(sess, state_dim, action_dim, BATCH_SIZE, TAU, LRA)
@@ -199,4 +199,4 @@ def main(config):
     print("Finish.")
 
 if __name__ == "__main__":
-    main(config) 
+    main(config_dict) 
