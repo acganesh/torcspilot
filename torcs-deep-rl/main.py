@@ -26,9 +26,9 @@ from log_utils import TORCS_ExperimentLogger
 
 OU = OrnsteinUhlenbeck()
 
-config_dict = {'train': 1,
+config_dict = {'train': 0,
           'network': 'FCNetK',
-          'experiment_name': 'aalborg',
+          'experiment_name': 'speedway_inference',
           'EXPERIMENTS_PATH': './experiments/'}
 
 def main(config_dict):

@@ -150,6 +150,7 @@ class TorcsEnv:
 
         # Termination judgement #########################
         episode_terminate = False
+        """
         if (abs(trackPos) > 1):  # Episode is terminated if the car is out of track
             reward = -200
             episode_terminate = True
@@ -160,6 +161,7 @@ class TorcsEnv:
                 print("No progress")
                 episode_terminate = True
                 client.R.d['meta'] = True
+        """
 
         if np.cos(obs['angle']) < 0: # Episode is terminated if the agent runs backward
             episode_terminate = True
