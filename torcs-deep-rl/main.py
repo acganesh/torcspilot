@@ -26,7 +26,7 @@ from log_utils import TORCS_ExperimentLogger
 
 
 config = {'train': 1,
-          'network': 'FCNetH',
+          'network': 'FCNetI',
           'experiment_name': 'aalborg',
           'EXPERIMENTS_PATH': './experiments/'}
 
