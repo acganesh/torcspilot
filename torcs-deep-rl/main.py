@@ -23,13 +23,12 @@ from log_utils import TORCS_ExperimentLogger
 #@click.option("--train", required=True, help="0 or 1: flag to enable training the network")
 #@click.option("--experiment", required=True, help="Specify the name of the current experiment, for logging and model persistence")
 
-
 OU = OrnsteinUhlenbeck()
 
 config_dict = {'train': 0,
-          'network': 'FCNetK',
-          'experiment_name': 'speedway_inference',
-          'EXPERIMENTS_PATH': './experiments/'}
+               'network': 'FCNetA',
+               'experiment_name': 'alpine2_inference',
+               'EXPERIMENTS_PATH': './experiments/'}
 
 def main(config_dict):
     train = config_dict['train']

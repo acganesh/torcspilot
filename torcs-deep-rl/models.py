@@ -1,5 +1,4 @@
-"""
-Model architectures for Actor and Critic networks
+""" Model architectures for Actor and Critic networks
 """
 
 import tensorflow as tf
